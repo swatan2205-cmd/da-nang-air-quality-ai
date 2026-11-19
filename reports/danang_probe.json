@@ -1,0 +1,54 @@
+{
+  "requested": [
+    16.0544,
+    108.2022
+  ],
+  "kind": "atmospheric_model_estimate",
+  "sources": {
+    "https://air-quality-api.open-meteo.com/v1/air-quality": {
+      "url": "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=16.0544&longitude=108.2022&timezone=Asia%2FHo_Chi_Minh&hourly=pm2_5%2Cpm10%2Ccarbon_monoxide%2Cnitrogen_dioxide%2Csulphur_dioxide%2Cozone&past_days=1&forecast_days=1",
+      "retrieved_at": "2026-11-18T09:02:25.347968+00:00",
+      "units": {
+        "time": "iso8601",
+        "pm2_5": "μg/m³",
+        "pm10": "μg/m³",
+        "carbon_monoxide": "μg/m³",
+        "nitrogen_dioxide": "μg/m³",
+        "sulphur_dioxide": "μg/m³",
+        "ozone": "μg/m³"
+      },
+      "grid": [
+        16.099998,
+        108.20001
+      ],
+      "hours": 41,
+      "missing_or_invalid": {
+        "pm2_5": 0,
+        "pm10": 0,
+        "carbon_monoxide": 0,
+        "nitrogen_dioxide": 0,
+        "sulphur_dioxide": 0,
+        "ozone": 0
+      }
+    },
+    "https://api.open-meteo.com/v1/forecast": {
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=16.0544&longitude=108.2022&timezone=Asia%2FHo_Chi_Minh&hourly=temperature_2m%2Crelative_humidity_2m&past_days=1&forecast_days=1",
+      "retrieved_at": "2026-11-18T09:02:26.361078+00:00",
+      "units": {
+        "time": "iso8601",
+        "temperature_2m": "°C",
+        "relative_humidity_2m": "%"
+      },
+      "grid": [
+        16.063269,
+        108.23864
+      ],
+      "hours": 41,
+      "missing_or_invalid": {
+        "temperature_2m": 0,
+        "relative_humidity_2m": 0
+      }
+    }
+  },
+  "complete_common_hours": 41
+}

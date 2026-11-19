@@ -1,0 +1,10 @@
+.git
+.env
+**/__pycache__
+**/node_modules
+site/.git
+site/.openai
+site/dist
+data
+*.sqlite3*
+reports/phase2/*.joblib
