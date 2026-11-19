@@ -35,8 +35,8 @@ Các route GET trả JSON với khóa `data`. Dữ liệu theo giờ có `update
 | /api/aqi/current | Giá trị US AQI, phương pháp, mức phân loại, chất chi phối khi đủ chỉ số thành phần và hướng dẫn hiện tại |
 | /api/alerts | Cảnh báo dữ liệu cũ, thiếu hoặc hướng dẫn theo chỉ số US AQI hiện tại |
 | /api/stations | Điểm tham chiếu theo tọa độ với kind=model_grid |
-| /api/predictions | Trạng thái kiểm định địa phương cùng các chân trời 1 giờ, 3 giờ |
-| /api/model/info | Metadata artifact, thứ tự feature và kết quả Phase 2 tại Bắc Kinh |
+| /api/predictions | Dự báo thử nghiệm chuỗi CAMS tại Đà Nẵng sau 1 giờ và 3 giờ. Yêu cầu có đúng bảy giờ liên tiếp đến giờ hiện hành |
+| /api/model/info | Metadata, thứ tự feature và kết quả holdout riêng cho thí nghiệm Bắc Kinh và mô hình Đà Nẵng |
 | /api/system/status | Tình trạng kết nối cơ sở dữ liệu, lịch thu thập và lần thử mới nhất theo từng nguồn |
 
 Khóa chính của `environment_hours` là (location_id, source_id, valid_at). Lệnh upsert lưu phiên bản truy xuất mới nhất, bao gồm tọa độ lưới, thời gian truy xuất và cờ chất lượng. Việc gọi lặp cùng khoảng giờ giữ một bản ghi cho mỗi khóa. Chính sách này phục vụ dashboard. Kiểm định hồi cứu theo thời điểm phát cần thêm kho lưu phiên bản bản tin và dự báo thực sự đã phát. Bảng `source_status` cho phép nhận biết nguồn lỗi dù dữ liệu đã lưu vẫn đọc được.

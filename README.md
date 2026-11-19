@@ -6,7 +6,11 @@
 
 Giao diện React có năm trang, dùng cùng hợp đồng REST với hai cách triển khai. Bản Sites chạy API Worker và lưu dữ liệu vào R2. Đã kích hoạt đồng bộ vào phút 05 mỗi giờ theo giờ Việt Nam. Bản tự lưu trữ dùng FastAPI, PostgreSQL và APScheduler. Xem [hướng dẫn triển khai](docs/self-host.md), [phương pháp AQI và nguồn](docs/aqi_sources.md) và [quy trình đồng bộ bản Sites](site/OPERATIONS.md).
 
-Dữ liệu Đà Nẵng là ước tính Open-Meteo. Chỉ số đang hiển thị dùng US AQI do nguồn cung cấp. Mục dự báo trình bày kết quả thử nghiệm Bắc Kinh và trạng thái chờ kiểm định tại Đà Nẵng.
+Dữ liệu Đà Nẵng là ước tính Open-Meteo/CAMS. Chỉ số hiển thị dùng US AQI do nguồn cung cấp. Khi mở [trang Dự báo AI](https://da-nang-air-quality-ai.nitia-gpt-pr-6208.chatgpt.site/#du-bao), hệ thống dùng đúng giờ hiện tại và sáu giờ trước tại 16,0544°B, 108,2022°Đ để dự báo PM2.5 sau 1 và 3 giờ. Các mốc hiển thị theo giờ Việt Nam. Nếu thiếu một giờ hoặc dữ liệu cũ, trang thông báo trạng thái.
+
+Mô hình thử nghiệm địa phương `danang-cams-ridge-v1` học trên chuỗi PM2.5 CAMS tại Đà Nẵng (train năm 2024, validation nửa đầu 2025, test nửa cuối 2025). MAE test lần lượt là 1,01 và 2,61 µg/m³, so với persistence 1,05 và 2,49. Dự báo 3 giờ có sai số lớn hơn persistence trên tập test. Các sai số so với ước tính CAMS; độ chính xác so với thiết bị quan trắc địa phương còn chờ xác minh. [Kết quả theo chân trời](reports/danang-pilot/metrics.csv) · [Khảo sát nguồn đối chứng](docs/danang-observations.md)
+
+Để tái huấn luyện, chạy `python -m ml.train_danang`. Artifact dùng cho FastAPI ở `reports/danang-pilot/model.json`. Khi phát hành phiên bản mới, sao chép artifact sang `site/worker/pilot-model.json` trước khi build. Hai artifact cần giống nhau. Mô hình Bắc Kinh bên dưới là thí nghiệm riêng.
 
 ## Phase 2 · Huấn luyện và kiểm định tại Bắc Kinh
 

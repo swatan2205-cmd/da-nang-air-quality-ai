@@ -39,7 +39,7 @@ class BackendTests(unittest.TestCase):
                      "model/info","predictions","system/status","air-quality/history"]:
             self.assertEqual(self.client.get("/api/"+path).status_code,200,path)
         self.assertIsNone(self.client.get("/api/aqi/current").json()["data"]["value"])
-        self.assertEqual(self.client.get("/api/predictions").json()["data"]["status"],"region_not_validated")
+        self.assertEqual(self.client.get("/api/predictions").json()["data"]["status"],"insufficient_data")
 
     def test_retries_are_idempotent_and_history_is_joined(self):
         for _ in range(2):

@@ -70,6 +70,8 @@ def download(source, days=7):
     params = {"latitude": POINT["latitude"], "longitude": POINT["longitude"],
               "timezone": LOCAL.key, "hourly": ",".join(units), "past_days": days,
               "forecast_days": 1}
+    if source == "air":
+        params["domains"] = "cams_global"
     with httpx.Client(timeout=httpx.Timeout(18, connect=8)) as client:
         for attempt in range(3):
             try:

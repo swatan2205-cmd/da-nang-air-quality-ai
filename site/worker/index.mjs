@@ -1,4 +1,6 @@
 import {collect} from './data.mjs'
+import {forecast} from './pilot.mjs'
+import pilotInfo from './pilot-model.json' with {type:'json'}
 import {assets, snapshot, bands, modelInfo} from './generated.mjs'
 
 function json(data,status=200) {
@@ -6,13 +8,19 @@ function json(data,status=200) {
 }
 let recent = null
 let pending
+async function recordForecast(bucket,result,now) {
+  if (!bucket || result.status!=='experimental') return
+  const key='forecasts/'+result.model_version+'/'+result.origin_utc+'.json'
+  await bucket.put(key,JSON.stringify({...result,issued_at:new Date(now).toISOString()}),
+    {onlyIf:{etagDoesNotMatch:'*'}})
+}
 async function history(bucket,now) {
-  if (!recent && bucket) {
+  if ((!recent || now-Date.parse(recent.retrieved_at)>900000) && bucket) {
     const stored = await bucket.get('latest.json')
     if (stored) recent = await stored.json()
   }
-  let cached = recent || snapshot
-  if (!recent || now-Date.parse(cached.retrieved_at)>900000) {
+  let cached = recent && Date.parse(recent.updated_at)>=Date.parse(snapshot.updated_at) ? recent : snapshot
+  if (!recent || now-Date.parse(cached.retrieved_at)>900000 || Date.parse(cached.updated_at)<Math.floor(now/3600000)*3600000) {
     try {
       pending ??= collect(14).finally(()=>{pending=null})
       recent = await pending
@@ -30,25 +38,15 @@ async function history(bucket,now) {
 export default {async fetch(request,env={}) {
   const url = new URL(request.url)
   if (url.pathname==='/api/system/sync' && request.method==='POST') {
-    // Restricted to the owner-private Site by the hosting dispatch layer.
+    // Only provider data fetched by this server may enter the archive.
     if (!env.BUCKET) return json({error:'Storage unavailable'},503)
-    if (Number(request.headers.get('Content-Length'))>300000) return json({error:'Too large'},413)
-    const payload=await request.json()
-    const keys=['pm2_5','pm10','carbon_monoxide','nitrogen_dioxide','sulphur_dioxide','ozone','temperature_2m','relative_humidity_2m','us_aqi']
-    const times=Array.isArray(payload.data)?payload.data.map(row=>Date.parse(row.time)):[]
-    const now=Date.now(), retrieved=Date.parse(payload.retrieved_at)
-    const valid=payload.kind==='atmospheric_model_estimate' && payload.source==='Open-Meteo / CAMS'
-      && times.length>=1 && times.length<=365 && Number.isFinite(retrieved) && Math.abs(retrieved-now)<900000
-      && times.every((t,i)=>Number.isFinite(t)&&t<=now&&t%3600000===0&&(!i||t>times[i-1]))
-      && times.at(-1)===Date.parse(payload.updated_at) && payload.data.every(row=>keys.every(k=>
-        row[k]===null || Number.isFinite(row[k]) && (k==='temperature_2m'||row[k]>=0)
-          && (k!=='relative_humidity_2m'||row[k]<=100)))
-    if (!valid) return json({error:'Invalid normalized hourly data'},422)
-    const body=JSON.stringify(payload)
-    await env.BUCKET.put('history/'+payload.updated_at.slice(0,13)+'.json',body)
-    await env.BUCKET.put('latest.json',body)
-    recent=payload
-    return json({data:{saved:times.length,updated_at:payload.updated_at}})
+    const now=Date.now()
+    const packet=await history(env.BUCKET,now)
+    if (packet.refresh_delayed || Date.parse(packet.updated_at)!==Math.floor(now/3600000)*3600000)
+      return json({error:'Current provider hour unavailable'},503)
+    await recordForecast(env.BUCKET,forecast(packet.data,now),now)
+    return json({data:{saved:packet.data.length,updated_at:packet.updated_at}})
+
   }
   if (!['GET','HEAD'].includes(request.method)) return new Response(null,{status:405})
   if (!url.pathname.startsWith('/api/')) {
@@ -58,8 +56,7 @@ export default {async fetch(request,env={}) {
     return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':asset[0]}})
   }
   const path=url.pathname.slice(5)
-  if (path==='model/info') return json({data:modelInfo})
-  if (path==='predictions') return json({data:[],status:'region_not_validated',horizons:[1,3]})
+  if (path==='model/info') return json({data:{...pilotInfo,beijing_benchmark:modelInfo}})
   if (path==='stations') return json({data:[{id:'dn-grid',name:'Điểm tham chiếu Đà Nẵng',latitude:16.0544,longitude:108.2022,kind:'model_grid'}]})
   const now=Date.now()
   const snapshotData=await history(env.BUCKET,now)
@@ -70,6 +67,11 @@ export default {async fetch(request,env={}) {
   const index={value,category:band?.[1]??null,advice:meta.stale?null:band?.[2]??null,method:'US AQI',standard:'US AQI',
     status:value===null?'unavailable':meta.stale?'stale':'ok',valid_at:row.time,source:'Open-Meteo / CAMS'}
   switch(path) {
+    case 'predictions': {
+      const result=forecast(data,now)
+      await recordForecast(env.BUCKET,result,now)
+      return json({...meta,data:result})
+    }
     case 'air-quality/history': {
       const days=Number(url.searchParams.get('days')??7)
       if (!Number.isInteger(days)||days<1||days>14) return json({error:'days must be 1–14'},422)

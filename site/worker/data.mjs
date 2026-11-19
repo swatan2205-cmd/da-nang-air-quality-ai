@@ -10,6 +10,7 @@ export async function collect(days, now = Date.now()) {
     const url = new URL(endpoint)
     url.search = new URLSearchParams({...coords, timezone:'GMT', hourly:Object.keys(fields).join(','),
       past_days:String(days), forecast_days:'1'})
+    if (endpoint.includes('air-quality-api.')) url.searchParams.set('domains','cams_global')
     let packet
     for (let attempt=0; attempt<2; attempt++) {
       try {

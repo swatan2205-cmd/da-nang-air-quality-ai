@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from backend.aqi import assess_us_aqi
 from backend.data import POINT, UTC
+from backend.pilot import load_model, predict_hours
 from backend.store import collect, database, history, jobs, meta, utc
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,8 +53,8 @@ def model_info():
         metrics = [dict(horizon=int(row["horizon"]), model=row["model"], samples=int(row["n"]),
                         **{k:float(row[k]) for k in ("mae","rmse","r2")})
                    for row in csv.DictReader(stream) if row["split"] == "test"]
-    return dict(region="Beijing", danang_status="region_not_validated", manifests=manifests,
-                test_metrics=metrics)
+    return dict(region="Beijing", danang_status="experimental_cams_only", manifests=manifests,
+                test_metrics=metrics, danang_pilot=load_model())
 
 
 def create_app(db_url=None, schedule=True):
@@ -109,8 +110,13 @@ def create_app(db_url=None, schedule=True):
 
     @app.get("/api/predictions", response_model=Envelope)
     def get_predictions():
-        return {"data": {"status":"region_not_validated", "horizons_h":[1,3],
-                          "predictions":[], "reason":"Cần kiểm định bằng quan trắc tại Đà Nẵng."}}
+        now = datetime.now(UTC)
+        origin = now.replace(minute=0,second=0,microsecond=0)
+        recent = history(engine, origin-timedelta(hours=24), now, "air")
+        recent["data"] = predict_hours(recent["data"], now)
+        recent["kind"] = "experimental_ml_forecast"
+        recent["stale"] = recent["updated_at"] is None or recent["updated_at"] < origin
+        return recent
 
     @app.get("/api/stations", response_model=Envelope)
     def get_stations():
