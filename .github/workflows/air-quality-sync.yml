@@ -1,0 +1,23 @@
+name: Đồng bộ dữ liệu không khí
+on:
+  schedule:
+    - cron: '5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: air-quality-sync
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Đồng bộ và kiểm tra dữ liệu
+        env:
+          AIR_SYNC_SECRET: ${{ secrets.AIR_SYNC_SECRET }}
+        run: node site/worker/ingest.mjs

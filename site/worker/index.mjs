@@ -30,13 +30,35 @@ async function history(bucket,now) {
         await bucket.put('history/'+recent.updated_at.slice(0,13)+'.json',body)
         await bucket.put('latest.json',body)
       }
-    } catch { /* Keep timestamped readings if the provider is unavailable. */ }
+    } catch (error) { console.error('Air data refresh failed:', String(error)) }
   }
   return {...cached, stale:now-Date.parse(cached.updated_at)>10800000,
     refresh_delayed:now-Date.parse(cached.retrieved_at)>3600000}
 }
 export default {async fetch(request,env={}) {
   const url = new URL(request.url)
+  if (url.pathname==='/api/system/ingest' && request.method==='POST') {
+    const secret=env.SYNC_SECRET
+    const provided=request.headers.get('Authorization') || ''
+    if (!secret || provided !== 'Bearer '+secret) return json({error:'Unauthorized'},401)
+    if (!env.BUCKET) return json({error:'Storage unavailable'},503)
+    if (Number(request.headers.get('Content-Length')||0)>300000) return json({error:'Too large'},413)
+    const packet=await request.json()
+    const now=Date.now(), rows=packet.data
+    if (packet.source!=='Open-Meteo / CAMS' || packet.kind!=='atmospheric_model_estimate' ||
+        !Array.isArray(rows) || !rows.length || rows.length>365 ||
+        Date.parse(packet.retrieved_at)>now+60000 || Date.parse(packet.retrieved_at)<now-900000 ||
+        Date.parse(packet.updated_at)!==Math.floor(now/3600000)*3600000 ||
+        rows.at(-1).time!==packet.updated_at ||
+        rows.some((r,i)=>!Number.isFinite(Date.parse(r.time)) || Date.parse(r.time)>now ||
+          (i && Date.parse(rows[i-1].time)>=Date.parse(r.time)))) return json({error:'Invalid data'},422)
+    const body=JSON.stringify(packet)
+    await env.BUCKET.put('history/'+packet.updated_at.slice(0,13)+'.json',body)
+    await env.BUCKET.put('latest.json',body)
+    recent=packet
+    await recordForecast(env.BUCKET,forecast(rows,now),now)
+    return json({data:{saved:rows.length,updated_at:packet.updated_at}})
+  }
   if (url.pathname==='/api/system/sync' && request.method==='POST') {
     // Only provider data fetched by this server may enter the archive.
     if (!env.BUCKET) return json({error:'Storage unavailable'},503)
