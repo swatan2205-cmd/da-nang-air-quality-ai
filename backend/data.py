@@ -10,8 +10,8 @@ import httpx
 LOG = logging.getLogger(__name__)
 UTC = timezone.utc
 LOCAL = ZoneInfo("Asia/Ho_Chi_Minh")
-POINT = {"id": "danang-grid", "name": "Điểm tham chiếu Đà Nẵng",
-         "latitude": 16.0544, "longitude": 108.2022, "kind": "model_grid"}
+POINT = {"id": "danang-su-pham-grid", "name": "Điểm tham chiếu ĐH Sư phạm Đà Nẵng",
+         "latitude": 16.0622, "longitude": 108.1594, "kind": "model_grid"}
 AIR = dict.fromkeys(("pm2_5", "pm10", "carbon_monoxide", "nitrogen_dioxide",
                      "sulphur_dioxide", "ozone"), "μg/m³")
 AIR.update({f"us_aqi_{name}": "USAQI" for name in list(AIR)})

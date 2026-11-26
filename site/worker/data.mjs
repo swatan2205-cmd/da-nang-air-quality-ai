@@ -1,4 +1,4 @@
-const coords = {latitude: 16.0544, longitude: 108.2022}
+const coords = {latitude: 16.0622, longitude: 108.1594}
 const aq = Object.fromEntries(['pm2_5','pm10','carbon_monoxide','nitrogen_dioxide','sulphur_dioxide','ozone'].map(k => [k,'μg/m³']))
 export const sources = [
   ['https://air-quality-api.open-meteo.com/v1/air-quality', {...aq,us_aqi:'USAQI'}],

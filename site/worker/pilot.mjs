@@ -5,7 +5,7 @@ export function forecast(rows,now=Date.now()) {
   const origin=Math.floor(now/hourMs)*hourMs
   const readings=new Map(rows.map(row=>[Date.parse(row.time),row.pm2_5]))
   const result={model_version:artifact.version,validation:'cams_estimates_only',
-    kind:'experimental_ml_forecast',coordinates:{latitude:16.0544,longitude:108.2022},
+    kind:'experimental_ml_forecast',coordinates:{latitude:16.0622,longitude:108.1594},
     origin_utc:null,unit:'µg/m³',predictions:[]}
   if (!readings.has(origin)) return {...result,status:rows.length?'stale':'insufficient_data'}
   const lag=Array.from({length:7},(_,offset)=>readings.get(origin-offset*hourMs))

@@ -10,13 +10,13 @@ let recent = null
 let pending
 async function recordForecast(bucket,result,now) {
   if (!bucket || result.status!=='experimental') return
-  const key='forecasts/'+result.model_version+'/'+result.origin_utc+'.json'
+  const key='su-pham/forecasts/'+result.model_version+'/'+result.origin_utc+'.json'
   await bucket.put(key,JSON.stringify({...result,issued_at:new Date(now).toISOString()}),
     {onlyIf:{etagDoesNotMatch:'*'}})
 }
 async function history(bucket,now) {
   if ((!recent || now-Date.parse(recent.retrieved_at)>900000) && bucket) {
-    const stored = await bucket.get('latest.json')
+    const stored = await bucket.get('su-pham/latest.json')
     if (stored) recent = await stored.json()
   }
   let cached = recent && Date.parse(recent.updated_at)>=Date.parse(snapshot.updated_at) ? recent : snapshot
@@ -27,8 +27,8 @@ async function history(bucket,now) {
       cached = recent
       if (bucket) {
         const body=JSON.stringify(recent)
-        await bucket.put('history/'+recent.updated_at.slice(0,13)+'.json',body)
-        await bucket.put('latest.json',body)
+        await bucket.put('su-pham/history/'+recent.updated_at.slice(0,13)+'.json',body)
+        await bucket.put('su-pham/latest.json',body)
       }
     } catch (error) { console.error('Air data refresh failed:', String(error)) }
   }
@@ -46,6 +46,7 @@ export default {async fetch(request,env={}) {
     const packet=await request.json()
     const now=Date.now(), rows=packet.data
     if (packet.source!=='Open-Meteo / CAMS' || packet.kind!=='atmospheric_model_estimate' ||
+        packet.coordinates?.latitude!==16.0622 || packet.coordinates?.longitude!==108.1594 ||
         !Array.isArray(rows) || !rows.length || rows.length>365 ||
         Date.parse(packet.retrieved_at)>now+60000 || Date.parse(packet.retrieved_at)<now-900000 ||
         Date.parse(packet.updated_at)!==Math.floor(now/3600000)*3600000 ||
@@ -53,8 +54,8 @@ export default {async fetch(request,env={}) {
         rows.some((r,i)=>!Number.isFinite(Date.parse(r.time)) || Date.parse(r.time)>now ||
           (i && Date.parse(rows[i-1].time)>=Date.parse(r.time)))) return json({error:'Invalid data'},422)
     const body=JSON.stringify(packet)
-    await env.BUCKET.put('history/'+packet.updated_at.slice(0,13)+'.json',body)
-    await env.BUCKET.put('latest.json',body)
+    await env.BUCKET.put('su-pham/history/'+packet.updated_at.slice(0,13)+'.json',body)
+    await env.BUCKET.put('su-pham/latest.json',body)
     recent=packet
     await recordForecast(env.BUCKET,forecast(rows,now),now)
     return json({data:{saved:rows.length,updated_at:packet.updated_at}})
@@ -79,7 +80,7 @@ export default {async fetch(request,env={}) {
   }
   const path=url.pathname.slice(5)
   if (path==='model/info') return json({data:{...pilotInfo,beijing_benchmark:modelInfo}})
-  if (path==='stations') return json({data:[{id:'dn-grid',name:'Điểm tham chiếu Đà Nẵng',latitude:16.0544,longitude:108.2022,kind:'model_grid'}]})
+  if (path==='stations') return json({data:[{id:'dn-su-pham-grid',name:'Điểm tham chiếu ĐH Sư phạm Đà Nẵng',latitude:16.0622,longitude:108.1594,kind:'model_grid'}]})
   const now=Date.now()
   const snapshotData=await history(env.BUCKET,now)
   const {data,...meta}=snapshotData
@@ -104,7 +105,7 @@ export default {async fetch(request,env={}) {
     case 'air-quality/current': return json({...meta,data:row})
     case 'aqi/current': return json({...meta,data:index})
     case 'system/status': {
-      const archive=env.BUCKET ? await env.BUCKET.head('latest.json') : null
+      const archive=env.BUCKET ? await env.BUCKET.head('su-pham/latest.json') : null
       return json({...meta,data:{status:meta.stale?'stale':'ok',region:'Da Nang',
         archived_at:archive?.uploaded?.toISOString()??null}})
     }

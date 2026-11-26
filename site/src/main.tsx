@@ -43,9 +43,9 @@ function SiteMap(){
   const host=useRef<HTMLDivElement>(null)
   useEffect(()=>{
     if(!host.current)return
-    const map=L.map(host.current,{scrollWheelZoom:false}).setView([16.0544,108.2022],11)
+    const map=L.map(host.current,{scrollWheelZoom:false}).setView([16.0622,108.1594],12)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map)
-    L.circleMarker([16.0544,108.2022],{radius:10,weight:3,color:'#fff',fillColor:'#168d70',fillOpacity:1}).bindPopup('Điểm tham chiếu Đà Nẵng · Dữ liệu lưới Open-Meteo').addTo(map)
+    L.circleMarker([16.0622,108.1594],{radius:10,weight:3,color:'#fff',fillColor:'#168d70',fillOpacity:1}).bindPopup('Điểm tham chiếu ĐH Sư phạm · Ước tính lưới Open-Meteo').addTo(map)
     return ()=>{map.remove()}
   },[])
   return <div ref={host} className="map" aria-label="Bản đồ điểm tham chiếu Đà Nẵng"/>
@@ -172,7 +172,7 @@ function App(){
   <div className="subheading"><h2>Thông số môi trường</h2><a className="textlink" href="#quan-trac">Chi tiết <ArrowRight size={15}/></a></div>
   <div className="tiles">{([['pm10','PM10',Waves],['ozone','Ozon (O₃)',Leaf],['temperature_2m','Nhiệt độ',Thermometer],['relative_humidity_2m','Độ ẩm',Droplets]] as const).map(([k,n,I])=><article className="tile" key={k}><div className="tiletitle"><I size={17}/>{n}</div><strong>{number(current?.[k])} <small>{units(k)}</small></strong></article>)}</div>
   {chart}<div className="overview-lower"><section className="card"><div className="eyebrow"><Radio size={15}/> Khí ô nhiễm</div><div className="measurelist">{vars.filter(([k])=>['carbon_monoxide','nitrogen_dioxide','sulphur_dioxide'].includes(k)).map(([k,n,d])=><div key={k}><span><b>{n}</b><small>{d}</small></span><strong>{number(current?.[k])} <small>{pmUnit}</small></strong></div>)}</div></section><section className="card"><div className="eyebrow"><Cpu size={15}/> Dự báo AI thử nghiệm</div><h2>PM2.5 sau 1 và 3 giờ</h2>{forecast.predictions.length?<><div className="measurelist">{forecast.predictions.map(p=><div key={p.horizon_h}><span><b>Sau {p.horizon_h} giờ</b><small>{stamp(p.valid_at_utc)} (UTC+7)</small></span><span><strong>{number(p.pm25)} {pmUnit}</strong><small>{trendLabel(p)}</small></span></div>)}</div><p>Tham chiếu CAMS Đà Nẵng</p></>:<p>{forecastMessage(forecast.status)}</p>}<a href="#du-bao" className="textlink">Chi tiết dự báo <ArrowRight size={14}/></a></section></div><div className="sourcefoot"><Database size={14}/> Open-Meteo · CAMS <span>Giờ hiệu lực {stamp(now)} · Thu thập {stamp(history.retrieved_at)} (UTC+7)</span></div></>}
-  {page==='quan-trac'&&<><div className="observe"><section className="card"><div className="eyebrow"><LocateFixed size={15}/> Điểm dữ liệu</div><h2>Trung tâm Đà Nẵng</h2><p>16,0544° B · 108,2022° Đ. Tọa độ dùng để truy vấn ước tính trên lưới Open-Meteo.</p><SiteMap/></section><section className="card"><div className="eyebrow"><Radio size={15}/> Giờ hiệu lực {stamp(now)}</div><h2>Thông số tại điểm</h2><div className="measurelist">{vars.map(([key,name,desc])=><div key={key}><span><b>{name}</b><small>{desc}</small></span><strong>{number(current?.[key])} <small>{pmUnit}</small></strong></div>)}</div></section></div>{chart}</>}
+  {page==='quan-trac'&&<><div className="observe"><section className="card"><div className="eyebrow"><LocateFixed size={15}/> Điểm dữ liệu</div><h2>ĐH Sư phạm Đà Nẵng</h2><p>16,0622° B · 108,1594° Đ. Tọa độ trạm CEM dùng để truy vấn ước tính trên lưới Open-Meteo.</p><SiteMap/></section><section className="card"><div className="eyebrow"><Radio size={15}/> Giờ hiệu lực {stamp(now)}</div><h2>Thông số tại điểm</h2><div className="measurelist">{vars.map(([key,name,desc])=><div key={key}><span><b>{name}</b><small>{desc}</small></span><strong>{number(current?.[key])} <small>{pmUnit}</small></strong></div>)}</div></section></div>{chart}</>}
   {page==='du-bao'&&<Forecast rows={rows} result={forecast}/>}
   {page==='lich-su'&&<HistoryView rows={rows}/>}
   {page==='he-thong'&&<Method aqi={aqi}/>}
