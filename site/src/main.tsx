@@ -188,7 +188,7 @@ function Observe({defaultRows,defaultRetrieved}:{defaultRows:Reading[],defaultRe
     {places.length>0&&<ul className="place-results" aria-label="Kết quả tìm địa điểm">{places.map(p=><li key={p.id}>
       <button type="button" onClick={()=>choose(p)}><strong>{p.name}</strong><span>{p.detail} · {p.latitude.toFixed(4)}, {p.longitude.toFixed(4)}</span></button>
     </li>)}</ul>}
-    <p>Chọn kết quả để xem điểm đại diện. Vị trí do Open-Meteo trả về có thể trùng tên; kiểm tra tọa độ trước khi chọn. <a href="https://tinhthanhvn.com/province/da-nang/phuong-hai-chau" target="_blank" rel="noreferrer">Nguồn tọa độ Hải Châu</a>.</p></section>
+    </section>
     <div className="observe"><section className="card"><div className="eyebrow"><LocateFixed size={15}/> Điểm dữ liệu</div>
       <h2>{place.name}</h2><p>{place.latitude.toFixed(4)}° B · {place.longitude.toFixed(4)}° Đ. Ước tính trên lưới Open-Meteo/CAMS.</p><SiteMap latitude={place.latitude} longitude={place.longitude} name={place.name}/></section>
       <section className="card"><div className="eyebrow"><Radio size={15}/> Giờ hiệu lực {stamp(now)}</div><h2>Thông số tại điểm</h2>
