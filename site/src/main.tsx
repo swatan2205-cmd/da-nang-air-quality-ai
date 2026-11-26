@@ -53,16 +53,16 @@ function DataChart({records,field,daily=false}:{records:Reading[],field:Pollutan
     <Area type="linear" dataKey="v" stroke="#168d70" strokeWidth={2.4} fill="url(#mist)" isAnimationActive={false} connectNulls={false}/>
   </AreaChart></ResponsiveContainer></div>
 }
-function SiteMap(){
+function SiteMap({latitude,longitude,name}:{latitude:number,longitude:number,name:string}){
   const host=useRef<HTMLDivElement>(null)
   useEffect(()=>{
     if(!host.current)return
-    const map=L.map(host.current,{scrollWheelZoom:false}).setView([16.0622,108.1594],12)
+    const map=L.map(host.current,{scrollWheelZoom:false}).setView([latitude,longitude],12)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map)
-    L.circleMarker([16.0622,108.1594],{radius:10,weight:3,color:'#fff',fillColor:'#168d70',fillOpacity:1}).bindPopup('Điểm tham chiếu ĐH Sư phạm · Ước tính lưới Open-Meteo').addTo(map)
+    L.circleMarker([latitude,longitude],{radius:10,weight:3,color:'#fff',fillColor:'#168d70',fillOpacity:1}).bindPopup('Điểm tham chiếu · Ước tính lưới Open-Meteo').addTo(map)
     return ()=>{map.remove()}
-  },[])
-  return <div ref={host} className="map" aria-label="Bản đồ điểm tham chiếu Đà Nẵng"/>
+  },[latitude,longitude])
+  return <div ref={host} className="map" aria-label={'Bản đồ điểm tham chiếu '+name}/>
 }
 type Prediction = {horizon_h:number, valid_at_utc:string, pm25:number, change:number, trend:string}
 type ForecastData = {status:string, origin_utc:string|null, model_version:string, predictions:Prediction[]}
@@ -131,6 +131,73 @@ function HistoryView({rows}:{rows:Reading[]}){
 }
 function Parameter({value,onChange}:{value:Pollutant,onChange:(v:Pollutant)=>void}){return <select aria-label="Chọn chất ô nhiễm" value={value} onChange={e=>onChange(e.target.value as Pollutant)}>{vars.map(([key,name])=><option key={key} value={key}>{name}</option>)}</select>}
 
+type Place = {id:string,name:string,latitude:number,longitude:number,detail:string}
+const defaultPlace:Place={id:'su-pham',name:'ĐH Sư phạm Đà Nẵng',latitude:16.0622,longitude:108.1594,detail:'Điểm tham chiếu ban đầu'}
+const normalizedName=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().trim()
+
+function Observe({defaultRows,defaultRetrieved}:{defaultRows:Reading[],defaultRetrieved?:string}) {
+  const [query,setQuery]=useState(''),[places,setPlaces]=useState<Place[]>([]),[place,setPlace]=useState(defaultPlace)
+  const [rows,setRows]=useState<Reading[]|null>(null),[retrieved,setRetrieved]=useState<string>(),[searching,setSearching]=useState(false)
+  const [loading,setLoading]=useState(false),[error,setError]=useState(''),[field,setField]=useState<Pollutant>('pm2_5')
+  const searchId=useRef(0),requestId=useRef(0)
+  async function search(e:React.FormEvent) {
+    e.preventDefault()
+    const term=query.trim(),id=++searchId.current
+    if(term.length<2){setPlaces([]);setError('Nhập ít nhất 2 ký tự để tìm địa điểm.');return}
+    setSearching(true);setPlaces([]);setError('')
+    try{
+      const url=new URL('https://geocoding-api.open-meteo.com/v1/search')
+      url.search=new URLSearchParams({name:term,count:'100',language:'vi',countryCode:'VN'}).toString()
+      const response=await fetch(url,{signal:AbortSignal.timeout(12000)})
+      if(!response.ok)throw Error()
+      const payload=await response.json()
+      if(id!==searchId.current)return
+      const results:Place[]=(payload.results||[]).filter((r:{name:string,latitude:number,longitude:number})=>
+        Number.isFinite(r.latitude)&&Number.isFinite(r.longitude)&&r.latitude>=15.5&&r.latitude<=16.5&&r.longitude>=107.5&&r.longitude<=108.7
+        && !(normalizedName(term)==='hai chau'&&normalizedName(r.name)==='hai chau'&&r.latitude<16.0))
+        .map((r:{id:number,name:string,latitude:number,longitude:number,admin1?:string,admin2?:string,admin3?:string,feature_code?:string})=>({
+          id:String(r.id),name:r.name,latitude:r.latitude,longitude:r.longitude,
+          detail:[r.admin3,r.admin2,r.admin1,r.feature_code].filter(Boolean).join(' · ')}))
+      // Open-Meteo returns a different locality named Hải Châu. This known
+      // central reference is clearly labelled and remains selectable separately.
+      if(normalizedName(term).includes('hai chau')) results.unshift({id:'hai-chau-center',name:'Hải Châu · Đà Nẵng',
+        latitude:16.0762,longitude:108.218,detail:'Điểm trung tâm tham khảo · nguồn tinhthanhvn.com'})
+      setPlaces(results)
+      if(!results.length)setError('Không tìm thấy địa điểm quanh Đà Nẵng. Hãy thử tên khác.')
+    }catch{if(id===searchId.current)setError('Không kết nối được dịch vụ tìm địa điểm. Hãy thử lại.')}
+    finally{if(id===searchId.current)setSearching(false)}
+  }
+  async function choose(next:Place) {
+    const id=++requestId.current
+    setPlace(next);setPlaces([]);setQuery(next.name);setRows([]);setRetrieved(undefined);setError('');setLoading(true)
+    try{
+      const {collect}=await import('../worker/data.mjs')
+      const packet=await collect(7,Date.now(),{latitude:next.latitude,longitude:next.longitude})
+      if(id!==requestId.current)return
+      setRows(packet.data);setRetrieved(packet.retrieved_at)
+    }catch{if(id===requestId.current)setError('Không lấy được dữ liệu cho địa điểm này. Hãy thử lại.')}
+    finally{if(id===requestId.current)setLoading(false)}
+  }
+  const displayed=rows??defaultRows,current=displayed[displayed.length-1],now=current?.time
+  const stale=!!now&&Date.now()-Date.parse(now)>3*3600000
+  return <><section className="card location-search"><h2>Tìm địa điểm quanh Đà Nẵng</h2>
+    <form onSubmit={search}><label htmlFor="place-query">Tên địa điểm</label><div className="location-search-controls">
+      <input id="place-query" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Ví dụ: Hải Châu, Sơn Trà" />
+      <button type="submit" disabled={searching}>{searching?'Đang tìm…':'Tìm kiếm'}</button></div></form>
+    {error&&<p role="alert">{error}</p>}
+    {places.length>0&&<ul className="place-results" aria-label="Kết quả tìm địa điểm">{places.map(p=><li key={p.id}>
+      <button type="button" onClick={()=>choose(p)}><strong>{p.name}</strong><span>{p.detail} · {p.latitude.toFixed(4)}, {p.longitude.toFixed(4)}</span></button>
+    </li>)}</ul>}
+    <p>Chọn kết quả để xem điểm đại diện. Vị trí do Open-Meteo trả về có thể trùng tên; kiểm tra tọa độ trước khi chọn. <a href="https://tinhthanhvn.com/province/da-nang/phuong-hai-chau" target="_blank" rel="noreferrer">Nguồn tọa độ Hải Châu</a>.</p></section>
+    <div className="observe"><section className="card"><div className="eyebrow"><LocateFixed size={15}/> Điểm dữ liệu</div>
+      <h2>{place.name}</h2><p>{place.latitude.toFixed(4)}° B · {place.longitude.toFixed(4)}° Đ. Ước tính trên lưới Open-Meteo/CAMS.</p><SiteMap latitude={place.latitude} longitude={place.longitude} name={place.name}/></section>
+      <section className="card"><div className="eyebrow"><Radio size={15}/> Giờ hiệu lực {stamp(now)}</div><h2>Thông số tại điểm</h2>
+      {loading?<p role="status">Đang tải dữ liệu địa điểm…</p>:!current?<p>Chưa có dữ liệu cho địa điểm này.</p>:<><p>{stale?'Dữ liệu đã cũ · ':''}Ước tính mô hình khí quyển · Thu thập {stamp(rows?retrieved:defaultRetrieved)} (UTC+7)</p>
+      <div className="measurelist">{vars.map(([key,name,desc])=><div key={key}><span><b>{name}</b><small>{desc}</small></span><strong>{number(current[key])} <small>{pmUnit}</small></strong></div>)}
+      {([['temperature_2m','Nhiệt độ'],['relative_humidity_2m','Độ ẩm']] as const).map(([key,name])=><div key={key}><span><b>{name}</b></span><strong>{number(current[key])} <small>{units(key)}</small></strong></div>)}</div></>}</section></div>
+    <section className="card chartcard"><div className="charthead"><div><div className="eyebrow"><Activity size={15}/> Diễn biến theo giờ</div><h2>Nồng độ tại {place.name}</h2></div><Parameter value={field} onChange={setField}/></div><DataChart records={displayed} field={field}/></section></>
+}
+
 function App(){
   const [forecast,setForecast]=useState<ForecastData>({...unavailableForecast,status:'loading'})
   const [page,setPage]=useState(paths),[mobile,setMobile]=useState(false),[history,setHistory]=useState<History>({data:[]}),[aqi,setAqi]=useState<Aqi>({}),[error,setError]=useState(''),[loading,setLoading]=useState(true),[nonce,setNonce]=useState(0),[field,setField]=useState<Pollutant>('pm2_5'),[span,setSpan]=useState(24)
@@ -178,7 +245,7 @@ function App(){
   const chart=<section className="card chartcard"><div className="charthead"><div><div className="eyebrow"><Activity size={15}/> Diễn biến theo giờ</div><h2>Nồng độ {fieldName} <small>({pmUnit})</small></h2></div><div className="charttools"><Parameter value={field} onChange={setField}/><select aria-label="Khoảng thời gian" value={span} onChange={e=>setSpan(+e.target.value)}><option value={24}>24 giờ</option><option value={72}>72 giờ</option><option value={168}>7 ngày</option></select></div></div><DataChart records={cut(span)} field={field}/></section>
   return <div className="shell">{mobile&&<button className="scrim" onClick={()=>setMobile(false)} aria-label="Đóng menu"/>}
   <aside className={mobile?'rail opened':'rail'}><a href="#tong-quan" className="brand"><div className="brandmark"><Wind size={29}/></div><div><strong>Da Nang Air</strong><small>QUALITY AI</small></div></a><button className="close" onClick={()=>setMobile(false)} aria-label="Đóng menu"><X/></button><nav>{nav.map(({id,title,icon:Icon})=><a href={'#'+id} className={id===page?'active':''} aria-current={id===page?'page':undefined} key={id}><Icon size={19}/>{title}{id===page&&<i/>}</a>)}</nav><div className="railfoot"><div className="globe"><Globe2 size={18}/></div><div><strong>Đà Nẵng, Việt Nam</strong><small>UTC+7 · Giờ địa phương</small></div></div></aside>
-  <main><header className="topbar"><div className="crumb"><button className="hamb" onClick={()=>setMobile(true)} aria-label="Mở menu"><Menu/></button><Layers size={15}/><span>Không gian giám sát</span><ChevronRight size={14}/><b>{nav[selected].title}</b></div><div className="status"><i className={loading||stale||!current?'pending':''}/>{status}</div></header>
+  <main><header className="topbar"><div className="crumb"><button className="hamb" onClick={()=>setMobile(true)} aria-label="Mở menu"><Menu/></button><Layers size={15}/><span>Không gian giám sát</span><ChevronRight size={14}/><b>{nav[selected].title}</b></div>{page!=='quan-trac'&&<div className="status"><i className={loading||stale||!current?'pending':''}/>{status}</div>}</header>
   <div className="mainbody"><div className="pageheading"><div><div className="eyebrow"><MapPin size={14}/> Đà Nẵng · Việt Nam</div><h1>{titles[selected]}</h1></div><button className="reload" disabled={loading} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15} className={loading?'spin':''}/> Làm mới</button></div>
   {error&&<div role="alert" className="warn">{error}</div>}
   {page==='tong-quan'&&<><div className="overview"><section className="hero"><div className="herotop"><span className="herolabel"><Wind size={17}/> Bụi mịn PM2.5</span><span className="hero-source">Mô hình khí quyển</span></div><div className="heronumber">{number(current?.pm2_5)} <small>{pmUnit}</small></div><div className="herochange">{diff!==null?<>{diff>0?<ArrowUpRight size={16}/>:<ArrowDownRight size={16}/>} {diff===0?'Ổn định':(diff>0?'Tăng ':'Giảm ')+number(Math.abs(diff))+' '+pmUnit} so với giờ trước</>:<><Activity size={16}/> {loading?'Đang tải dữ liệu':'Chưa đủ hai giờ liên tiếp'}</>}</div><div className="herofoot"><span><LocateFixed size={14}/> Điểm tham chiếu Đà Nẵng</span><b>{stamp(now)}</b></div></section>
@@ -186,7 +253,7 @@ function App(){
   <div className="subheading"><h2>Thông số môi trường</h2><a className="textlink" href="#quan-trac">Chi tiết <ArrowRight size={15}/></a></div>
   <div className="tiles">{([['pm10','PM10',Waves],['ozone','Ozon (O₃)',Leaf],['temperature_2m','Nhiệt độ',Thermometer],['relative_humidity_2m','Độ ẩm',Droplets]] as const).map(([k,n,I])=><article className="tile" key={k}><div className="tiletitle"><I size={17}/>{n}</div><strong>{number(current?.[k])} <small>{units(k)}</small></strong></article>)}</div>
   {chart}<div className="overview-lower"><section className="card"><div className="eyebrow"><Radio size={15}/> Khí ô nhiễm</div><div className="measurelist">{vars.filter(([k])=>['carbon_monoxide','nitrogen_dioxide','sulphur_dioxide'].includes(k)).map(([k,n,d])=><div key={k}><span><b>{n}</b><small>{d}</small></span><strong>{number(current?.[k])} <small>{pmUnit}</small></strong></div>)}</div></section><section className="card"><div className="eyebrow"><Cpu size={15}/> Dự báo AI thử nghiệm</div><h2>PM2.5 sau 1 và 3 giờ</h2>{forecast.predictions.length?<><div className="measurelist">{forecast.predictions.map(p=><div key={p.horizon_h}><span><b>Sau {p.horizon_h} giờ</b><small>{stamp(p.valid_at_utc)} (UTC+7)</small></span><span><strong>{number(p.pm25)} {pmUnit}</strong><small>{trendLabel(p)}</small></span></div>)}</div><p>Tham chiếu CAMS Đà Nẵng</p></>:<p>{forecastMessage(forecast.status)}</p>}<a href="#du-bao" className="textlink">Chi tiết dự báo <ArrowRight size={14}/></a></section></div><div className="sourcefoot"><Database size={14}/> Open-Meteo · CAMS <span>Giờ hiệu lực {stamp(now)} · Thu thập {stamp(history.retrieved_at)} (UTC+7)</span></div></>}
-  {page==='quan-trac'&&<><div className="observe"><section className="card"><div className="eyebrow"><LocateFixed size={15}/> Điểm dữ liệu</div><h2>ĐH Sư phạm Đà Nẵng</h2><p>16,0622° B · 108,1594° Đ. Tọa độ trạm CEM dùng để truy vấn ước tính trên lưới Open-Meteo.</p><SiteMap/></section><section className="card"><div className="eyebrow"><Radio size={15}/> Giờ hiệu lực {stamp(now)}</div><h2>Thông số tại điểm</h2><div className="measurelist">{vars.map(([key,name,desc])=><div key={key}><span><b>{name}</b><small>{desc}</small></span><strong>{number(current?.[key])} <small>{pmUnit}</small></strong></div>)}</div></section></div>{chart}</>}
+  {page==='quan-trac'&&<Observe defaultRows={rows} defaultRetrieved={history.retrieved_at}/>}
   {page==='du-bao'&&<Forecast rows={rows} result={forecast}/>}
   {page==='lich-su'&&<HistoryView rows={rows}/>}
   {page==='he-thong'&&<Method aqi={aqi}/>}

@@ -5,10 +5,10 @@ export const sources = [
   ['https://api.open-meteo.com/v1/forecast', {temperature_2m:'°C',relative_humidity_2m:'%'}]
 ]
 
-export async function collect(days, now = Date.now()) {
+export async function collect(days, now = Date.now(), location = coords) {
   const streams = await Promise.all(sources.map(async ([endpoint, fields]) => {
     const url = new URL(endpoint)
-    url.search = new URLSearchParams({...coords, timezone:'GMT', hourly:Object.keys(fields).join(','),
+    url.search = new URLSearchParams({...location, timezone:'GMT', hourly:Object.keys(fields).join(','),
       past_days:String(days), forecast_days:'1'})
     if (endpoint.includes('air-quality-api.')) url.searchParams.set('domains','cams_global')
     let packet
@@ -43,6 +43,6 @@ export async function collect(days, now = Date.now()) {
     .map(([ms,row])=>({...row,...streams[1].rows.get(ms)})).sort((a,b)=>a.time.localeCompare(b.time))
   if (!data.length) throw Error('No common hours')
   return {data,updated_at:data.at(-1).time,retrieved_at:new Date(now).toISOString(),
-    kind:'atmospheric_model_estimate',source:'Open-Meteo / CAMS',coordinates:coords,
+    kind:'atmospheric_model_estimate',source:'Open-Meteo / CAMS',coordinates:location,
     grids:streams.map(({endpoint,grid})=>({endpoint,grid}))}
 }
