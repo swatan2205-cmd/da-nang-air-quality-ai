@@ -28,6 +28,20 @@ const paths = () => nav.find(n=>n.id===location.hash.slice(1))?.id || 'tong-quan
 const pmUnit = 'µg/m³'
 const units = (key:string) => key==='temperature_2m'?'°C':key==='relative_humidity_2m'?'%':pmUnit
 const hasValue = (v:unknown):v is number => typeof v==='number' && Number.isFinite(v)
+const aqiBands = [
+  ['Tốt','0–50'], ['Trung bình','51–100'],
+  ['Kém cho nhóm nhạy cảm','101–150'], ['Có hại cho sức khỏe','151–200'],
+  ['Rất có hại cho sức khỏe','201–300'], ['Nguy hại','301 trở lên']
+]
+
+function AqiScale() {
+  return <div className="aqibar" aria-label="Các mức US AQI">
+    {aqiBands.map(([name,range],i)=><button type="button" className="aqiband" key={range}
+      aria-label={name+', US AQI '+range} aria-describedby={'aqi-band-'+i}>
+      <span className="aqitooltip" role="tooltip" id={'aqi-band-'+i}>{name}<br/><b>US AQI {range}</b></span>
+    </button>)}
+  </div>
+}
 
 function DataChart({records,field,daily=false}:{records:Reading[],field:Pollutant,daily?:boolean}) {
   const rows = records.map(r=>({t:r.time,v:r[field]??null}))
@@ -168,7 +182,7 @@ function App(){
   <div className="mainbody"><div className="pageheading"><div><div className="eyebrow"><MapPin size={14}/> Đà Nẵng · Việt Nam</div><h1>{titles[selected]}</h1></div><button className="reload" disabled={loading} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15} className={loading?'spin':''}/> Làm mới</button></div>
   {error&&<div role="alert" className="warn">{error}</div>}
   {page==='tong-quan'&&<><div className="overview"><section className="hero"><div className="herotop"><span className="herolabel"><Wind size={17}/> Bụi mịn PM2.5</span><span className="hero-source">Mô hình khí quyển</span></div><div className="heronumber">{number(current?.pm2_5)} <small>{pmUnit}</small></div><div className="herochange">{diff!==null?<>{diff>0?<ArrowUpRight size={16}/>:<ArrowDownRight size={16}/>} {diff===0?'Ổn định':(diff>0?'Tăng ':'Giảm ')+number(Math.abs(diff))+' '+pmUnit} so với giờ trước</>:<><Activity size={16}/> {loading?'Đang tải dữ liệu':'Chưa đủ hai giờ liên tiếp'}</>}</div><div className="herofoot"><span><LocateFixed size={14}/> Điểm tham chiếu Đà Nẵng</span><b>{stamp(now)}</b></div></section>
-  <section className="card aqicard"><div className="eyebrow"><Gauge size={16}/> Chỉ số chất lượng không khí</div><div className="aqinumber">{number(aqi.value,0)} <small>{aqi.method||'AQI'}</small></div><strong>{okAqi?(aqi.category||'Chỉ số từ nguồn'):'Chưa có chỉ số hợp lệ'}</strong><div className="aqibar"><i/><i/><i/><i/><i/><i/></div><p>{okAqi?aqi.advice:'Đang chờ dữ liệu AQI đủ điều kiện từ nguồn.'}</p></section></div>
+  <section className="card aqicard"><div className="eyebrow"><Gauge size={16}/> Chỉ số chất lượng không khí</div><div className="aqinumber">{number(aqi.value,0)} <small>{aqi.method||'AQI'}</small></div><strong>{okAqi?(aqi.category||'Chỉ số từ nguồn'):'Chưa có chỉ số hợp lệ'}</strong><AqiScale/><p>{okAqi?aqi.advice:'Đang chờ dữ liệu AQI đủ điều kiện từ nguồn.'}</p></section></div>
   <div className="subheading"><h2>Thông số môi trường</h2><a className="textlink" href="#quan-trac">Chi tiết <ArrowRight size={15}/></a></div>
   <div className="tiles">{([['pm10','PM10',Waves],['ozone','Ozon (O₃)',Leaf],['temperature_2m','Nhiệt độ',Thermometer],['relative_humidity_2m','Độ ẩm',Droplets]] as const).map(([k,n,I])=><article className="tile" key={k}><div className="tiletitle"><I size={17}/>{n}</div><strong>{number(current?.[k])} <small>{units(k)}</small></strong></article>)}</div>
   {chart}<div className="overview-lower"><section className="card"><div className="eyebrow"><Radio size={15}/> Khí ô nhiễm</div><div className="measurelist">{vars.filter(([k])=>['carbon_monoxide','nitrogen_dioxide','sulphur_dioxide'].includes(k)).map(([k,n,d])=><div key={k}><span><b>{n}</b><small>{d}</small></span><strong>{number(current?.[k])} <small>{pmUnit}</small></strong></div>)}</div></section><section className="card"><div className="eyebrow"><Cpu size={15}/> Dự báo AI thử nghiệm</div><h2>PM2.5 sau 1 và 3 giờ</h2>{forecast.predictions.length?<><div className="measurelist">{forecast.predictions.map(p=><div key={p.horizon_h}><span><b>Sau {p.horizon_h} giờ</b><small>{stamp(p.valid_at_utc)} (UTC+7)</small></span><span><strong>{number(p.pm25)} {pmUnit}</strong><small>{trendLabel(p)}</small></span></div>)}</div><p>Tham chiếu CAMS Đà Nẵng</p></>:<p>{forecastMessage(forecast.status)}</p>}<a href="#du-bao" className="textlink">Chi tiết dự báo <ArrowRight size={14}/></a></section></div><div className="sourcefoot"><Database size={14}/> Open-Meteo · CAMS <span>Giờ hiệu lực {stamp(now)} · Thu thập {stamp(history.retrieved_at)} (UTC+7)</span></div></>}
